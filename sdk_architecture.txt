@@ -1,0 +1,26 @@
+SCANNING LOCAL PUBLIC SDK ARCHITECTURE...
+
+AVAILABLE ORDER & OPTION CLASSES:
+  -> MultilegOrderRequest
+  -> MultilegOrderResult
+  -> NewOrder
+  -> OptionChainRequest
+  -> OptionChainResponse
+  -> OptionExpirationsRequest
+  -> OptionExpirationsResponse
+  -> OptionGreeks
+  -> Order
+  -> OrderExpirationRequest
+  -> OrderInstrument
+  -> OrderLegRequest
+  -> OrderRequest
+  -> OrderResponse
+  -> OrderSide
+  -> OrderStatus
+  -> OrderSubscriptionConfig
+  -> OrderType
+  -> OrderUpdate
+
+AVAILABLE EXECUTION METHODS:
+  -> place_multileg_order
+  -> place_order

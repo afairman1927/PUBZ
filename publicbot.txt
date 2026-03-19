@@ -1,0 +1,83 @@
+﻿import databento as db
+import pandas as pd
+import talib
+import logging
+
+# 1. The Power Grid: We log everything. Silent failures drain accounts.
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def fetch_and_prep_mnq_data(api_key: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Pulls pristine 1-minute OHLCV data for Micro Nasdaq (MNQ) from Databento.
+    Includes hard-coded error handling to prevent API crashes.
+    """
+    try:
+        logging.info("Connecting to Databento institutional API...")
+        client = db.Historical(api_key)
+
+        # Pulling the continuous front-month MNQ contract data (CME Globex)
+        logging.info(f"Fetching MNQ tick-level data from {start_date} to {end_date}...")
+        data = client.timeseries.get_range(
+            dataset="GLBX.MDP3", 
+            symbols="MNQ.c.0",   # "c.0" automatically tracks the active front-month contract!
+            start=start_date,
+            end=end_date,
+            schema="ohlcv-1m",   # 1-minute candles for deep backtesting
+            stype_in="continuous"
+        )
+        
+        df = data.to_df()
+        if df.empty:
+            logging.warning("Data fetch returned empty. The market might have been closed, or the query is wrong.")
+            return df
+            
+        logging.info(f"Successfully loaded {len(df)} rows of institutional data.")
+        return df
+
+    except db.BentoError as e:
+        logging.error(f"Databento API Error: The connection or query failed -> {e}")
+        return pd.DataFrame()
+    except Exception as e:
+        logging.error(f"Unexpected architectural failure: {e}")
+        return pd.DataFrame()
+
+def apply_momentum_logic(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Feeds the pristine data into TA-Lib C-binaries for lightning-fast indicator calculation.
+    """
+    try:
+        # Extract numpy arrays for TA-Lib speed
+        high = df['high'].values
+        low = df['low'].values
+        close = df['close'].values
+
+        # Calculate ADX (Trend Strength)
+        df['ADX'] = talib.ADX(high, low, close, timeperiod=14)
+        
+        # Calculate RSI (Momentum Velocity)
+        df['RSI'] = talib.RSI(close, timeperiod=14)
+        
+        # The Moat: Drop the 'NaN' warmup rows so the bot doesn't execute on empty data
+        df.dropna(inplace=True)
+        return df
+
+    except KeyError as e:
+        logging.error(f"Data mapping error. Missing required price column: {e}")
+        return df
+    except Exception as e:
+        logging.error(f"TA-Lib calculation failed: {e}")
+        return df
+
+# --- Execution Block ---
+if __name__ == "__main__":
+    # You will drop your $5 Databento key here once you create an account
+    DB_API_KEY = "YOUR_DATABENTO_API_KEY" 
+    
+    # We target the exact dates of the crash you're watching right now
+    raw_df = fetch_and_prep_mnq_data(DB_API_KEY, "2026-03-09", "2026-03-13")
+    
+    if not raw_df.empty:
+        strategy_df = apply_momentum_logic(raw_df)
+        print("\n--- ARMORY CHECK: LIVE DATA & INDICATORS ---")
+        # Let's look at the last 5 minutes of the crash
+        print(strategy_df[['close', 'ADX', 'RSI']].tail())
